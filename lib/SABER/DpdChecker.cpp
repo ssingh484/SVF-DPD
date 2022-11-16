@@ -63,11 +63,20 @@ void DpdChecker::initSrcs()
                     worklist.push(svfg->getDefSVFGNode(pagNode));
                     visited.set(svfg->getDefSVFGNode(pagNode)->getId());
 
+                    const SVFGNode* topStore = NULL;
+
                     // NodeID freeNodeId = svfg->getDefSVFGNode(pagNode)->getICFGNode()->getId();
 
                     while (! worklist.empty()) {
                         const SVFGNode* svfgNode = worklist.pop();
-                        outs() << "Node Popped : " << svfgNode << "\n";
+                        // outs() << "Node Popped : " << svfgNode << "\n";
+
+                        if (svfgNode->getNodeKind() == SVF::VFGNode::VFGNodeK::Store)
+                                {
+                                    // outs() << "SETTING SOURCE : " << svfgNode << "\n";
+                                    // addToSinks(dstNode);
+                                    topStore = svfgNode;
+                                }
 
                         for(auto EdgeIt = svfgNode->InEdgeBegin(), EndEdgeIt = svfgNode->InEdgeEnd() ; EdgeIt != EndEdgeIt ; EdgeIt++){
 
@@ -76,24 +85,28 @@ void DpdChecker::initSrcs()
                             // outs() << ;
                             const SVFGNode* dstNode = edge->getSrcNode();
                             if (visited.test(dstNode->getId()) == 0) {
-                                outs() << "Node Added : " << dstNode << "\n";
+                                // outs() << "Node Added : " << dstNode << "\n";
                                 visited.set(dstNode->getId());
 
-                                if (dstNode->getNodeKind() == SVF::VFGNode::VFGNodeK::Store)
-                                {
-                                    outs() << "SETTING SOURCE : " << dstNode << "\n";
-                                    // addToSinks(dstNode);
-                                    addToSources(dstNode);
-                                    addSrcToCSID(dstNode, it->first);
-                                }
-                                
-                                
+                                // if (dstNode->getNodeKind() == SVF::VFGNode::VFGNodeK::Store)
+                                // {
+                                //     outs() << "SETTING SOURCE : " << dstNode << "\n";
+                                //     // addToSinks(dstNode);
+                                //     addToSources(dstNode);
+                                //     addSrcToCSID(dstNode, it->first);
+                                // }
 
                                 worklist.push(dstNode);
                             }
                             else
                                 continue;
                         }
+                    }
+
+                    if ( topStore) {
+                        outs() << "SETTING SOURCE : " << topStore << "\n";
+                        addToSources(topStore);
+                        addSrcToCSIDs(topStore, it->first);
                     }
 
                 }
@@ -135,8 +148,10 @@ void DpdChecker::initSnks()
                   ICFGNodeBS ICFGvisited;
                   
 
-                  ICFGworklist.push(svfg->getDefSVFGNode(pagNode)->getICFGNode());
-                  ICFGvisited.set(svfg->getDefSVFGNode(pagNode)->getICFGNode()->getId());
+                //   ICFGworklist.push(svfg->getDefSVFGNode(pagNode)->getICFGNode());
+                //   ICFGvisited.set(svfg->getDefSVFGNode(pagNode)->getICFGNode()->getId());
+                ICFGworklist.push(it->first);
+                ICFGvisited.set(it->first->getId());
 
                   while (! ICFGworklist.empty()) {
                       const ICFGNode* icfgNode = ICFGworklist.pop();
@@ -170,7 +185,7 @@ void DpdChecker::initSnks()
 
                   while (! worklist.empty()) {
                       const SVFGNode* svfgNode = worklist.pop();
-                      outs() << "Node Popped : " << svfgNode << "\n";
+                    //   outs() << "Node Popped : " << svfgNode << "\n";
 
                       for(auto EdgeIt = svfgNode->InEdgeBegin(), EndEdgeIt = svfgNode->InEdgeEnd() ; EdgeIt != EndEdgeIt ; EdgeIt++){
 
@@ -179,7 +194,7 @@ void DpdChecker::initSnks()
                         // outs() << ;
                         const SVFGNode* dstNode = edge->getSrcNode();
                         if (visited.test(dstNode->getId()) == 0) {
-                            outs() << "Node Added : " << dstNode << "\n";
+                            // outs() << "Node Added : " << dstNode << "\n";
                             visited.set(dstNode->getId());
 
                             if (dstNode->getNodeKind() == SVF::VFGNode::VFGNodeK::Load && ICFGvisited.test(dstNode->getICFGNode()->getId()) != 0)
@@ -201,7 +216,7 @@ void DpdChecker::initSnks()
                         const VFGEdge* edge = *EdgeIt;
                         const SVFGNode* dstNode = edge->getDstNode();
                         if (visited.test(dstNode->getId()) == 0) {
-                            outs() << "Node Added : " << dstNode << "\n";
+                            // outs() << "Node Added : " << dstNode << "\n";
                             visited.set(dstNode->getId());
 
                             if (dstNode->getNodeKind() == SVF::VFGNode::VFGNodeK::Load && ICFGvisited.test(dstNode->getICFGNode()->getId()) != 0)
@@ -244,32 +259,47 @@ const std::string DpdChecker::getSVFGNodeLoc(const SVFGNode* N){
 }
 void DpdChecker::reportAlwaysUAF(ProgSlice* slice)
 {
-    const CallICFGNode* cs = getSrcCSID(slice->getSource());
+    // const CallICFGNode* cs = getSrcCSID(slice->getSource());
+    List<const CallICFGNode*> cs = getSrcCSIDs(slice->getSource());
+    SVFUtil::errs() << bugMsg1("\t Potential Always UAF (A potential use of a freed memory location always reacheable after deallocation) :") ;
+    while(!cs.empty()){
+        const CallICFGNode* csN = cs.pop();
+        SVFUtil::errs() << "memory freed at deallocation function call : ("
+                        << getSourceLoc(csN->getCallSite()) << ")\n";
+    }
+    SVFUtil::errs() << "\ndeallocated memory potentially used at : ";
     for (auto SinksIt = slice->sinksBegin(), SinksEnd = slice->sinksEnd() ; SinksIt != SinksEnd ; SinksIt++) {
         const SVFGNode* sinkNode = *SinksIt;
         // SVFIR* pag = getPAG();
         // PAGNode* pagSinkNode = pag->getGNode(sinkNode->getId());
-        // SVFGNode* svfgnode = svfg->getDefSVFGNode(pagSinkNode);
-        SVFUtil::errs() << " memory used at : ("
+        SVFUtil::errs() << "("
                     << getSVFGNodeLoc(sinkNode) << ")\n";
     }
-    SVFUtil::errs() << bugMsg1("\t Always UAF :") <<  " memory freed at : ("
-                    << getSourceLoc(cs->getCallSite()) << ")\n";
+    SVFUtil::errs() << "\n\n\n";
 }
 
 void DpdChecker::reportConditionalUAF(ProgSlice* slice)
 {
 
-    const CallICFGNode* cs = getSrcCSID(slice->getSource());
+    // const CallICFGNode* cs = getSrcCSID(slice->getSource());
+    List<const CallICFGNode*> cs = getSrcCSIDs(slice->getSource());
+    SVFUtil::errs() << bugMsg1("\t Potential Conditional UAF (A potential use of a freed memory location conditionally reacheable after deallocation) :") ;
+    while(!cs.empty()){
+        const CallICFGNode* csN = cs.pop();
+        SVFUtil::errs() << "memory freed at deallocation function call : ("
+                        << getSourceLoc(csN->getCallSite()) << ")\n";
+    }
+    SVFUtil::errs() << "\ndeallocated memory potentially used at : ";
     for (auto SinksIt = slice->sinksBegin(), SinksEnd = slice->sinksEnd() ; SinksIt != SinksEnd ; SinksIt++) {
         const SVFGNode* sinkNode = *SinksIt;
         // SVFIR* pag = getPAG();
         // PAGNode* pagSinkNode = pag->getGNode(sinkNode->getId());
-        SVFUtil::errs() << " memory used at : ("
+        SVFUtil::errs() << "("
                     << getSVFGNodeLoc(sinkNode) << ")\n";
     }
-    SVFUtil::errs() << bugMsg2("\t Conditional UAF :") <<  " memory freed at : ("
-                    << getSourceLoc(cs->getCallSite()) << ")\n";
+    SVFUtil::errs() << "\n\n\n";
+    // SVFUtil::errs() << bugMsg2("\t Conditional UAF :") <<  " memory freed at : ("
+    //                 << getSourceLoc(cs->getCallSite()) << ")\n";
 }
 
 void DpdChecker::reportBug(ProgSlice* slice)
