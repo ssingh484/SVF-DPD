@@ -63,7 +63,7 @@ void DpdChecker::initSrcs()
                     worklist.push(svfg->getDefSVFGNode(pagNode));
                     visited.set(svfg->getDefSVFGNode(pagNode)->getId());
 
-                    const SVFGNode* topStore = NULL;
+                    // const SVFGNode* topStore = NULL;
 
                     // NodeID freeNodeId = svfg->getDefSVFGNode(pagNode)->getICFGNode()->getId();
 
@@ -71,12 +71,12 @@ void DpdChecker::initSrcs()
                         const SVFGNode* svfgNode = worklist.pop();
                         // outs() << "Node Popped : " << svfgNode << "\n";
 
-                        if (svfgNode->getNodeKind() == SVF::VFGNode::VFGNodeK::Store)
-                                {
-                                    // outs() << "SETTING SOURCE : " << svfgNode << "\n";
-                                    // addToSinks(dstNode);
-                                    topStore = svfgNode;
-                                }
+                        // if (svfgNode->getNodeKind() == SVF::VFGNode::VFGNodeK::Store)
+                        //         {
+                        //             // outs() << "SETTING SOURCE : " << svfgNode << "\n";
+                        //             // addToSinks(dstNode);
+                        //             topStore = svfgNode;
+                        //         }
 
                         for(auto EdgeIt = svfgNode->InEdgeBegin(), EndEdgeIt = svfgNode->InEdgeEnd() ; EdgeIt != EndEdgeIt ; EdgeIt++){
 
@@ -88,13 +88,13 @@ void DpdChecker::initSrcs()
                                 // outs() << "Node Added : " << dstNode << "\n";
                                 visited.set(dstNode->getId());
 
-                                // if (dstNode->getNodeKind() == SVF::VFGNode::VFGNodeK::Store)
-                                // {
-                                //     outs() << "SETTING SOURCE : " << dstNode << "\n";
-                                //     // addToSinks(dstNode);
-                                //     addToSources(dstNode);
-                                //     addSrcToCSID(dstNode, it->first);
-                                // }
+                                if (dstNode->getNodeKind() == SVF::VFGNode::VFGNodeK::Store)
+                                {
+                                    outs() << "SETTING SOURCE : " << dstNode << "\n";
+                                    // addToSinks(dstNode);
+                                    addToSources(dstNode);
+                                    addSrcToCSIDs(dstNode, it->first);
+                                }
 
                                 worklist.push(dstNode);
                             }
@@ -103,11 +103,11 @@ void DpdChecker::initSrcs()
                         }
                     }
 
-                    if ( topStore) {
-                        outs() << "SETTING SOURCE : " << topStore << "\n";
-                        addToSources(topStore);
-                        addSrcToCSIDs(topStore, it->first);
-                    }
+                    // if ( topStore) {
+                    //     outs() << "SETTING SOURCE : " << topStore << "\n";
+                    //     addToSources(topStore);
+                    //     addSrcToCSIDs(topStore, it->first);
+                    // }
 
                 }
             }
